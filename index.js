@@ -2,25 +2,6 @@ require("dotenv").config();
 
 const afkUsers = new Map();
 
-async function removeAfk(member) {
-  const afkData = afkUsers.get(member.id);
-
-  if (!afkData) return false;
-
-  try {
-    // Restore their previous server nickname.
-    await member.setNickname(
-      afkData.previousNickname || null,
-      "AFK ended"
-    );
-  } catch (err) {
-    console.error(`Could not restore nickname for ${member.user.tag}:`, err.message);
-  }
-
-  afkUsers.delete(member.id);
-  return true;
-}
-
 const express = require("express");
 const {
   Client,
@@ -554,22 +535,6 @@ client.on("messageCreate", async message => {
       isSpam
         ? "Link/image spam detected"
         : "Blocked link/image",
-      `${member.user.tag} was timed out for ${LINK_TIMEOUT_MINUTES} minute(s). ` +
-      `Recent violations: ${violationCount}.`
-    );
-  } else {
-    await sendModLog(
-      message.channel,
-      "Automatic timeout failed",
-      `I deleted a link/image message from ${member.user.tag}, but could not timeout them: ${timeoutResult.error}`
-    );
-  }
-});
-
-  if (timeoutResult.ok) {
-    await sendModLog(
-      message.channel,
-      isSpam ? "Link/image spam detected" : "Blocked link/image",
       `${member.user.tag} was timed out for ${LINK_TIMEOUT_MINUTES} minute(s). ` +
       `Recent violations: ${violationCount}.`
     );
