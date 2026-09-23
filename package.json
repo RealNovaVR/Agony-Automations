@@ -1,0 +1,18 @@
+{
+  "name": "discord-moderation-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Discord moderation bot with role-gated commands and anti-link/anti-spam protection.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0"
+  }
+}

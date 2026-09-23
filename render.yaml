@@ -1,0 +1,20 @@
+services:
+  - type: web
+    name: discord-moderation-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: GUILD_ID
+        sync: false
+      - key: MOD_ROLE_IDS
+        sync: false
+      - key: LINK_ALLOWED_ROLE_IDS
+        sync: false
+      - key: PORT
+        value: 3000
