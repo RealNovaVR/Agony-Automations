@@ -1,5 +1,26 @@
 require("dotenv").config();
 
+const afkUsers = new Map();
+
+async function removeAfk(member) {
+  const afkData = afkUsers.get(member.id);
+
+  if (!afkData) return false;
+
+  try {
+    // Restore their previous server nickname.
+    await member.setNickname(
+      afkData.previousNickname || null,
+      "AFK ended"
+    );
+  } catch (err) {
+    console.error(`Could not restore nickname for ${member.user.tag}:`, err.message);
+  }
+
+  afkUsers.delete(member.id);
+  return true;
+}
+
 const express = require("express");
 const {
   Client,
@@ -377,6 +398,99 @@ client.on("messageCreate", async message => {
   const member = message.member;
   if (!member) return;
 
+  // =========================
+  // AFK SYSTEM
+  // =========================
+
+  if (message.content.toLowerCase().startsWith("?afk")) {
+    const args = message.content.slice(4).trim();
+    const reason = args || "AFK";
+
+    // If already AFK, update their reason.
+    if (afkUsers.has(member.id)) {
+      const afkData = afkUsers.get(member.id);
+      afkData.reason = reason;
+
+      try {
+        const baseName = member.nickname || member.user.username;
+
+        await member.setNickname(
+          `${baseName} (${reason})`.slice(0, 32),
+          "AFK reason updated"
+        );
+
+        await message.reply(`You are now AFK: **${reason}**`);
+      } catch (err) {
+        console.error("Could not update AFK nickname:", err.message);
+
+        await message.reply(
+          "I couldn't change your nickname. Make sure I have Manage Nicknames permission and my role is above the user's role."
+        );
+      }
+
+      return;
+    }
+
+    // Save their current nickname.
+    const previousNickname = member.nickname;
+
+    afkUsers.set(member.id, {
+      previousNickname,
+      reason
+    });
+
+    try {
+      const baseName = member.nickname || member.user.username;
+
+      await member.setNickname(
+        `${baseName} (${reason})`.slice(0, 32),
+        "User went AFK"
+      );
+
+      await message.reply(`You are now AFK: **${reason}**`);
+    } catch (err) {
+      console.error("Could not set AFK nickname:", err.message);
+
+      afkUsers.delete(member.id);
+
+      await message.reply(
+        "I couldn't change your nickname. Make sure I have Manage Nicknames permission and my role is above the user's role."
+      );
+    }
+
+    return;
+  }
+
+  // =========================
+  // REMOVE AFK WHEN THEY TALK
+  // =========================
+
+  if (afkUsers.has(member.id)) {
+    const wasAfk = await removeAfk(member);
+
+    if (wasAfk) {
+      await message.reply("Welcome back! Your AFK status has been removed.");
+    }
+  }
+
+  // =========================
+  // AFK MENTION SYSTEM
+  // =========================
+
+  for (const mentionedMember of message.mentions.members.values()) {
+    const afkData = afkUsers.get(mentionedMember.id);
+
+    if (afkData) {
+      await message.reply(
+        `**${mentionedMember.user.username}** is currently AFK: **${afkData.reason}**`
+      );
+    }
+  }
+
+  // =========================
+  // ANTI-LINK / IMAGE SYSTEM
+  // =========================
+
   // Allowed roles bypass link/image filtering.
   if (isLinkAllowed(member)) return;
 
@@ -385,7 +499,8 @@ client.on("messageCreate", async message => {
 
   if (!hasLink && !hasImage) return;
 
-  const wasAlreadyTimedOut = Boolean(member.communicationDisabledUntilTimestamp) &&
+  const wasAlreadyTimedOut =
+    Boolean(member.communicationDisabledUntilTimestamp) &&
     member.communicationDisabledUntilTimestamp > Date.now();
 
   const violationCount = recordViolation(member.id);
@@ -394,7 +509,10 @@ client.on("messageCreate", async message => {
   try {
     await message.delete();
   } catch (err) {
-    console.error("Could not delete violating message:", err.message);
+    console.error(
+      "Could not delete violating message:",
+      err.message
+    );
   }
 
   // If they were already timed out and violate again, ban them.
@@ -417,6 +535,7 @@ client.on("messageCreate", async message => {
         `I tried to ban ${member.user.tag} after a repeat link/image violation, but Discord rejected the ban: ${result.error}`
       );
     }
+
     return;
   }
 
@@ -428,6 +547,24 @@ client.on("messageCreate", async message => {
       ? `Automatic timeout: link/image spam (${violationCount} violations in the configured window).`
       : "Automatic timeout: links/images are not allowed."
   );
+
+  if (timeoutResult.ok) {
+    await sendModLog(
+      message.channel,
+      isSpam
+        ? "Link/image spam detected"
+        : "Blocked link/image",
+      `${member.user.tag} was timed out for ${LINK_TIMEOUT_MINUTES} minute(s). ` +
+      `Recent violations: ${violationCount}.`
+    );
+  } else {
+    await sendModLog(
+      message.channel,
+      "Automatic timeout failed",
+      `I deleted a link/image message from ${member.user.tag}, but could not timeout them: ${timeoutResult.error}`
+    );
+  }
+});
 
   if (timeoutResult.ok) {
     await sendModLog(
