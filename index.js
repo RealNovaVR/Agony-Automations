@@ -2,6 +2,25 @@ require("dotenv").config();
 
 const afkUsers = new Map();
 
+async function removeAfk(member) {
+  const afkData = afkUsers.get(member.id);
+
+  if (!afkData) return false;
+
+  try {
+    await member.setNickname(
+      afkData.previousNickname || null,
+      "User returned from AFK"
+    );
+  } catch (err) {
+    console.error("Could not restore nickname:", err.message);
+  }
+
+  afkUsers.delete(member.id);
+
+  return true;
+}
+
 const express = require("express");
 const {
   Client,
